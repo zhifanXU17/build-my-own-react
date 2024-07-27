@@ -10,19 +10,26 @@ function createDom(fiber) {
     .forEach((name) => {
       dom[name] = fiber.props[name];
     });
-
-  fiber.props.children.forEach((child) => {
-    render(child, dom);
-  });
-
   return dom;
 }
+function commitRoot() {
+  commitWork(wipRoot.child);
+  wipRoot = null;
+}
 
-let nextUnitOfWork = null;
+function commitWork(fiber) {
+  if (!fiber) {
+    return;
+  }
+  const domParent = fiber.parent.dom;
+  domParent.appendChild(fiber.dom);
+  commitWork(fiber.child);
+  commitWork(fiber.sibling);
+}
 
 // 发出第一个 Fiber：Root Fiber
 function render(element, container) {
-  nextUnitOfWork = {
+  wipRoot = {
     dom: container,
     props: {
       children: [element],
@@ -31,7 +38,12 @@ function render(element, container) {
     child: null,
     parent: null,
   };
+
+  nextUnitOfWork = wipRoot;
 }
+
+let nextUnitOfWork = null;
+let wipRoot = null;
 
 function workLoop(deadline) {
   // 应该退出
@@ -42,6 +54,10 @@ function workLoop(deadline) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
     // 查看剩余的时间是否足够执行下一个工作单元
     shouldYield = deadline.timeRemaining() < 1;
+  }
+
+  if (!nextUnitOfWork && wipRoot) {
+    commitRoot();
   }
   // 没有足够的工作时间就退出循环并把控制权交还给浏览器，请求浏览器下一次空闲的时候执行我们的工作单元
   requestIdleCallback(workLoop);
@@ -57,9 +73,9 @@ function performUnitOfWork(fiber) {
   }
 
   // 追加到父节点
-  if (fiber.parent) {
-    fiber.parent.dom.append(fiber.dom);
-  }
+  // if (fiber.parent) {
+  //   fiber.parent.dom.append(fiber.dom);
+  // }
 
   // 给 children 新建 fiber
   const elements = fiber.props.children;
